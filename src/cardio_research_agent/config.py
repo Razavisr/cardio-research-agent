@@ -21,7 +21,7 @@ def get_chat_model() -> ChatHuggingFace:
     else:
         device = device_name
 
-    local_pipeline = HuggingFacePipeline.from_model_id(
+    langchain_llm = HuggingFacePipeline.from_model_id(
         model_id=model_id,
         task="text-generation",
         device=device,
@@ -33,4 +33,4 @@ def get_chat_model() -> ChatHuggingFace:
         },
     )
 
-    return ChatHuggingFace(llm=local_pipeline)
+    return ChatHuggingFace(llm=langchain_llm)
