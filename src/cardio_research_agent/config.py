@@ -28,8 +28,8 @@ def get_chat_model() -> ChatHuggingFace:
         pipeline_kwargs={
             "max_new_tokens": 160,
             "do_sample": False,
-            "repetition_penalty": 1.05,
             "return_full_text": False,
+            "clean_up_tokenization_spaces": False,
         },
     )
 
