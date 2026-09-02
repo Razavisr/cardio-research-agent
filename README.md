@@ -8,6 +8,8 @@ It also includes a separate cohort-analysis tool for selecting synthetic patient
 
 This is a learning and demonstration project. It is not intended for diagnosis, treatment, clinical decision-making, or use with real patient data.
 
+For intended use, evaluation scope, and limitations, see [MODEL_CARD.md](MODEL_CARD.md).
+
 ## Why I built it
 
 A language model can turn a patient record into a readable summary, but a convincing answer is not necessarily a correct one. During an early version of this project, the model added dates and follow-up details that were not present in the source record.
