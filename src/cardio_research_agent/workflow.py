@@ -1,10 +1,12 @@
-"""LangGraph workflow for validated synthetic patient abstraction."""
+"""LangGraph workflow for governed synthetic patient abstraction."""
 
 import json
-from typing import TypedDict
+from typing import Literal, TypedDict
 
 from langchain.messages import HumanMessage, SystemMessage
+from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.graph import END, START, StateGraph
+from langgraph.types import interrupt
 from pydantic import ValidationError
 
 from cardio_research_agent.config import get_chat_model
@@ -24,14 +26,18 @@ class ResearchState(TypedDict, total=False):
     summary: dict
     issues: list[str]
     status: str
+    approval_decision: Literal["approve", "reject"]
+    reviewer_comment: str
 
 
 def build_workflow():
-    """Create and compile the patient-abstraction graph."""
+    """Build and compile the governed research workflow."""
+
     model = get_chat_model()
 
     def retrieve_patient(state: ResearchState) -> dict:
-        """Retrieve a synthetic patient through the LangChain tool."""
+        """Retrieve the synthetic source record."""
+
         tool_result = lookup_synthetic_patient.invoke(
             {"patient_id": state["patient_id"]}
         )
@@ -41,7 +47,8 @@ def build_workflow():
         }
 
     def generate_candidate(state: ResearchState) -> dict:
-        """Ask the local model for a structured candidate."""
+        """Ask the local model to produce a structured candidate."""
+
         tool_payload = json.dumps(
             state["tool_payload"],
             indent=2,
@@ -79,12 +86,17 @@ def build_workflow():
         }
 
     def validate_candidate(state: ResearchState) -> dict:
-        """Validate schema and compare values with source evidence."""
+        """Validate the model output against the schema and source."""
+
         try:
             summary = parse_model_summary(
                 state["raw_model_response"]
             )
-        except (ValueError, json.JSONDecodeError, ValidationError) as error:
+        except (
+            ValueError,
+            json.JSONDecodeError,
+            ValidationError,
+        ) as error:
             return {
                 "status": "review_required",
                 "issues": [
@@ -110,15 +122,109 @@ def build_workflow():
             "issues": [],
         }
 
+    def human_review(state: ResearchState) -> dict:
+        """Pause the graph and request a human decision."""
+
+        review_request = {
+            "question": (
+                "Do you approve this candidate summary "
+                "for research use?"
+            ),
+            "patient_id": state["patient_id"],
+            "automated_status": state["status"],
+            "summary": state.get("summary"),
+            "issues": state.get("issues", []),
+            "allowed_decisions": ["approve", "reject"],
+        }
+
+        review_response = interrupt(review_request)
+
+        if not isinstance(review_response, dict):
+            return {
+                "status": "invalid_review_decision",
+                "issues": state.get("issues", [])
+                + ["The human-review response must be a dictionary."],
+            }
+
+        decision = str(
+            review_response.get("decision", "")
+        ).strip().lower()
+
+        comment = str(
+            review_response.get("comment", "")
+        ).strip()
+
+        if decision not in {"approve", "reject"}:
+            return {
+                "status": "invalid_review_decision",
+                "reviewer_comment": comment,
+                "issues": state.get("issues", [])
+                + ["The decision must be approve or reject."],
+            }
+
+        if (
+            decision == "approve"
+            and state["status"] != "validated"
+        ):
+            return {
+                "approval_decision": "approve",
+                "reviewer_comment": comment,
+                "status": "approval_blocked",
+                "issues": state.get("issues", [])
+                + [
+                    "Human approval was blocked because "
+                    "automated validation did not pass."
+                ],
+            }
+
+        final_status = (
+            "approved"
+            if decision == "approve"
+            else "rejected"
+        )
+
+        return {
+            "approval_decision": decision,
+            "reviewer_comment": comment,
+            "status": final_status,
+        }
+
     builder = StateGraph(ResearchState)
 
-    builder.add_node("retrieve_patient", retrieve_patient)
-    builder.add_node("generate_candidate", generate_candidate)
-    builder.add_node("validate_candidate", validate_candidate)
+    builder.add_node(
+        "retrieve_patient",
+        retrieve_patient,
+    )
+    builder.add_node(
+        "generate_candidate",
+        generate_candidate,
+    )
+    builder.add_node(
+        "validate_candidate",
+        validate_candidate,
+    )
+    builder.add_node(
+        "human_review",
+        human_review,
+    )
 
     builder.add_edge(START, "retrieve_patient")
-    builder.add_edge("retrieve_patient", "generate_candidate")
-    builder.add_edge("generate_candidate", "validate_candidate")
-    builder.add_edge("validate_candidate", END)
+    builder.add_edge(
+        "retrieve_patient",
+        "generate_candidate",
+    )
+    builder.add_edge(
+        "generate_candidate",
+        "validate_candidate",
+    )
+    builder.add_edge(
+        "validate_candidate",
+        "human_review",
+    )
+    builder.add_edge("human_review", END)
 
-    return builder.compile()
+    checkpointer = InMemorySaver()
+
+    return builder.compile(
+        checkpointer=checkpointer,
+    )
