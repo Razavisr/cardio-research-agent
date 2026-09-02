@@ -5,8 +5,7 @@ from os import getenv
 from dotenv import load_dotenv
 from langchain_huggingface import ChatHuggingFace, HuggingFacePipeline
 
-DEFAULT_MODEL = "HuggingFaceTB/SmolLM2-360M-Instruct"
-
+DEFAULT_MODEL = "HuggingFaceTB/SmolLM2-1.7B-Instruct"
 
 def get_chat_model() -> ChatHuggingFace:
     """Load a local Hugging Face model through LangChain."""
