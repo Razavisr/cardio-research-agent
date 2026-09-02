@@ -28,6 +28,7 @@ class ResearchState(TypedDict, total=False):
     status: str
     approval_decision: Literal["approve", "reject"]
     reviewer_comment: str
+    released: bool
 
 
 def build_workflow():
@@ -189,6 +190,32 @@ def build_workflow():
             "status": final_status,
         }
 
+    def route_after_review(
+        state: ResearchState,
+    ) -> Literal["release_summary", "stop_workflow"]:
+        """Choose the next node from the review outcome."""
+
+        if state.get("status") == "approved":
+            return "release_summary"
+
+        return "stop_workflow"
+
+    def release_summary(state: ResearchState) -> dict:
+        """Mark an approved summary as released."""
+
+        return {
+            "released": True,
+            "status": "released",
+        }
+
+    def stop_workflow(state: ResearchState) -> dict:
+        """Prevent an unapproved summary from being released."""
+
+        return {
+            "released": False,
+            "status": "stopped",
+        }
+
     builder = StateGraph(ResearchState)
 
     builder.add_node(
@@ -207,6 +234,14 @@ def build_workflow():
         "human_review",
         human_review,
     )
+    builder.add_node(
+        "release_summary",
+        release_summary,
+    )
+    builder.add_node(
+        "stop_workflow",
+        stop_workflow,
+    )
 
     builder.add_edge(START, "retrieve_patient")
     builder.add_edge(
@@ -221,7 +256,17 @@ def build_workflow():
         "validate_candidate",
         "human_review",
     )
-    builder.add_edge("human_review", END)
+    builder.add_conditional_edges(
+        "human_review",
+        route_after_review,
+        {
+            "release_summary": "release_summary",
+            "stop_workflow": "stop_workflow",
+        },
+    )
+
+    builder.add_edge("release_summary", END)
+    builder.add_edge("stop_workflow", END)
 
     checkpointer = InMemorySaver()
 
