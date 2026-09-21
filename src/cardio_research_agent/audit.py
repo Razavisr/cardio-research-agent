@@ -22,7 +22,7 @@ def write_audit_record(
     summary = state.get("summary") or {}
 
     audit_record = {
-        "event_type": "patient_summary_review",
+        "event_type": "patient_summary_workflow",
         "workflow_version": "0.1.0",
         "run_id": run_id,
         "recorded_at_utc": datetime.now(

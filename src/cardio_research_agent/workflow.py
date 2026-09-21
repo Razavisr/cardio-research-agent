@@ -147,6 +147,19 @@ def build_workflow():
             "issues": [],
         }
 
+    def route_after_validation(
+        state: ResearchState,
+    ) -> Literal[
+        "release_summary",
+        "human_review",
+    ]:
+        """Send only failed validation to human review."""
+
+        if state.get("validation_status") == "validated":
+            return "release_summary"
+
+        return "human_review"
+
     def human_review(
         state: ResearchState,
     ) -> dict:
@@ -340,11 +353,14 @@ def build_workflow():
         "generate_candidate",
         "validate_candidate",
     )
-    builder.add_edge(
+    builder.add_conditional_edges(
         "validate_candidate",
-        "human_review",
+        route_after_validation,
+        {
+            "release_summary": "release_summary",
+            "human_review": "human_review",
+        },
     )
-
     builder.add_conditional_edges(
         "human_review",
         route_after_review,

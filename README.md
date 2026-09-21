@@ -2,7 +2,7 @@
 
 CardioResearch Agent is a small, research-only prototype I built to explore how an LLM-based clinical abstraction workflow can be made traceable and reviewable.
 
-The project uses synthetic heart-failure records. It retrieves a patient record, asks a local language model to produce a structured summary, checks every output field against the source, and pauses for human review before anything is released.
+The project uses synthetic heart-failure records. It retrieves a patient record, asks a local language model to produce a structured summary, and checks every output field against the source. Summaries that pass validation are released automatically in this synthetic demonstration. Failed summaries pause for human review and cannot be released unless automated validation succeeds.
 
 It also includes a separate cohort-analysis tool for selecting synthetic patients and calculating simple research KPIs.
 
@@ -14,7 +14,7 @@ For intended use, evaluation scope, and limitations, see [MODEL_CARD.md](MODEL_C
 
 A language model can turn a patient record into a readable summary, but a convincing answer is not necessarily a correct one. During an early version of this project, the model added dates and follow-up details that were not present in the source record.
 
-That failure shaped the rest of the design. I added a strict output schema, deterministic comparison with the source, a human approval gate, conditional release rules, and a saved audit record.
+That failure shaped the rest of the design. I added a strict output schema, deterministic comparison with the source, conditional human review, explicit release rules, and a saved audit record.
 
 The model generates a candidate. Regular Python code decides whether that candidate is valid and whether it is allowed to continue.
 
@@ -32,18 +32,18 @@ generate_candidate
   v
 validate_candidate
   |
-  v
-human_review
-  |
-  +---- approved ----> release_summary ----+
-  |                                        |
-  +---- rejected ----> stop_workflow ------+
-                                           |
-                                           v
-                                      record_audit
-                                           |
-                                           v
-                                          END
+  +---- validated --------> release_summary --------+
+  |                                                |
+  +---- review_required --> human_review            |
+                              |                     |
+                              v                     |
+                         stop_workflow -------------+
+                                                   |
+                                                   v
+                                              record_audit
+                                                   |
+                                                   v
+                                                  END
 ```
 
 The workflow follows these steps:
@@ -52,9 +52,9 @@ The workflow follows these steps:
 2. A local Hugging Face model produces a structured candidate summary.
 3. Pydantic checks the allowed fields, types, and numeric ranges.
 4. Deterministic validation compares every field with the source record.
-5. LangGraph pauses and presents the result to a human reviewer.
-6. Conditional routing either releases the summary or stops the workflow.
-7. The final evidence and decision chain is written to a local audit file.
+5. A validated summary follows the automatic release path.
+6. A failed summary pauses for human review. The reviewer can inspect and document the failure, but cannot release an output that failed validation.
+7. The final evidence, validation result, route, and optional review decision are written to a local audit file.
 
 ## Main components
 
@@ -120,9 +120,9 @@ The model is downloaded from Hugging Face the first time it is used. Later runs 
 python -m cardio_research_agent.step_10_audit_trace
 ```
 
-The workflow runs until the human-review node and asks for either `approve` or `reject`.
+If the candidate passes automated validation, the workflow completes without pausing and follows the release route. If validation fails, LangGraph pauses and presents the detected issues to a human reviewer.
 
-An approved and automatically validated summary follows the release route. A rejection, invalid decision, or blocked approval follows the stop route.
+A failed candidate cannot be released in the current prototype. A rejection or blocked approval follows the stop route, and both release and stop outcomes are recorded in the audit file.
 
 The final audit record is saved under:
 
@@ -199,7 +199,7 @@ The final audit file includes:
 - the raw model response;
 - the validated summary;
 - validation issues;
-- the reviewer’s decision and comment;
+- the reviewer’s decision and comment when review occurred;
 - the selected release outcome.
 
 A production system handling clinical data would need encrypted storage, access controls, retention rules, durable checkpointing, and policies governing what can be logged. The current local JSON record is suitable only for this synthetic demonstration.

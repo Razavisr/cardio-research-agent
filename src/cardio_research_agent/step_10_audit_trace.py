@@ -37,7 +37,11 @@ def main() -> None:
     interrupts = paused_result.get("__interrupt__", ())
 
     if not interrupts:
-        print("\nTHE WORKFLOW DID NOT PAUSE")
+        print("\n4. HUMAN REVIEW NOT REQUIRED")
+        print(
+            "The candidate passed automated validation "
+            "and was released."
+        )
         pprint(paused_result)
         return
 

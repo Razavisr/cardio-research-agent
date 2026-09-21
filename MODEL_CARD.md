@@ -80,9 +80,9 @@ The workflow applies the following controls:
 
 1. Pydantic rejects missing, additional, incorrectly typed, or out-of-range fields.
 2. Deterministic Python compares every generated value with the retrieved source.
-3. LangGraph pauses for an explicit human decision.
-4. Conditional routing sends approved results to a release node and all other outcomes to a stop node.
-5. Both outcomes pass through an audit node before the graph ends.
+3. Validated results follow the automatic release route in this synthetic demonstration.
+4. Failed results pause for human review and cannot be released.
+5. Both release and stop outcomes pass through an audit node before the graph ends.
 
 If automated validation fails, a human approval attempt is blocked rather than converted into a released result.
 
@@ -96,7 +96,7 @@ The evaluation set contains three locked synthetic cases:
 
 Each case has seven labeled output fields, giving 21 field-level comparisons.
 
-The evaluation runs the automated graph only until the human-review interrupt. Human corrections are not included in the reported accuracy.
+The evaluation runs the automated graph through deterministic validation. Human corrections are not included in the reported accuracy.
 
 ## Evaluation results
 
