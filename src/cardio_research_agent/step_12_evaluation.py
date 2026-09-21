@@ -1,4 +1,4 @@
-"""Step 12: evaluate automated abstraction before human review."""
+"""Step 12: evaluate automated abstraction and validation."""
 
 import json
 from uuid import uuid4
